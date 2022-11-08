@@ -1,17 +1,23 @@
 import reapy
+import random
+from typing import List
 
 p = reapy.Project()
+
+def note(start, dur, pitch, **args):
+    return {"start": start, "end": start + dur, "pitch": pitch, **args}
 
 def transpose(notes, amount):
     return [{**note, "pitch": note["pitch"] + amount} for note in notes]
 
+namespace = {"note": note, "transpose": transpose, **{key: getattr(random, key) for key in random.__all__}}
+to_derive: List[reapy.Take] = []
+
 with reapy.undo_block("Evaluate all clips"):
-    namespace = {"transpose": transpose}
-    to_derive = []
     for track in p.tracks:
         for item in track.items:
             take = item.active_take
-            if take.name.startswith('='):
+            if take.name.startswith("="):
                 # Derived clip
                 to_derive.append(take)
             else:
