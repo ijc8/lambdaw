@@ -96,7 +96,7 @@ with reapy.undo_block("Evaluate all clips"):
         else:
             filename = f"track{track_index}_item{item_index}.wav"
             filename = os.path.join(audio_dir, filename)
-            generate_wave(filename, output)
+            generate_wave(filename, itertools.islice(output, int(take.item.length * sample_rate)))
             if take.source.filename != filename:
                 # TODO: In what circumstances do we need to delete the old source?
                 source = reapy.RPR.PCM_Source_CreateFromFile(filename)
