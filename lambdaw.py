@@ -3,7 +3,6 @@ import array
 import itertools
 import os
 import wave
-from typing import List
 
 import reapy
 
@@ -52,34 +51,11 @@ def peek(it):
         return None
     return (first, itertools.chain((first,), it))
 
-p = reapy.Project()
-audio_dir = os.path.join(p.path, "lambdaw")
-os.makedirs(audio_dir, exist_ok=True)
-
-# Setup namespace for user code
-def note(start, dur, pitch, **args):
-    return {"start": start, "end": start + dur, "pitch": pitch, **args}
-
-def transpose(notes, amount):
-    return [{**note, "pitch": note["pitch"] + amount} for note in notes]
-
-namespace = {"note": note, "transpose": transpose, "sr": sample_rate}
-exec("from aleatora import *; from math import *; from random import *", namespace)
-
-to_derive: List[reapy.Take] = []
-
-generated_audio = False
-
-with reapy.undo_block("Evaluate all clips"):
-    for track_index, track in enumerate(p.tracks):
-        for item_index, item in enumerate(track.items):
-            take = item.active_take
-            if take.name.startswith("="):
-                # Derived clip
-                to_derive.append((track_index, item_index, take))
-            else:
-                namespace[take.name] = [note.infos for note in take.notes]
-    for track_index, item_index, take in to_derive:
+def eval_takes(selected=False):
+    generated_audio = False
+    for track_index, item_index, item, take in to_eval:
+        if selected and not item.is_selected:
+            continue
         # Add parenthesis to shorten common case of generator expressions.
         output = iter(eval("(" + take.name[1:] + ")", namespace))
         # Clear current notes
@@ -103,6 +79,33 @@ with reapy.undo_block("Evaluate all clips"):
                 reapy.RPR.SetMediaItemTake_Source(take.id, source)
             generated_audio = True
 
-if generated_audio:
-    # TODO: Instead use command 40441 to rebuild only peaks for generated audio clips.
-    reapy.RPR.Main_OnCommand(40048, 0)
+    if generated_audio:
+        # TODO: Instead use command 40441 to rebuild only peaks for generated audio clips.
+        reapy.RPR.Main_OnCommand(40048, 0)
+
+# Functions for user code
+def note(start, dur, pitch, **args):
+    return {"start": start, "end": start + dur, "pitch": pitch, **args}
+
+def transpose(notes, amount):
+    return [{**note, "pitch": note["pitch"] + amount} for note in notes]
+
+# Setup namespace for user code
+namespace = {"note": note, "transpose": transpose, "sr": sample_rate}
+exec("from aleatora import *; from math import *; from random import *", namespace)
+
+# NOTE: Even if we're only re-evaluating a subset of items,
+# the namespace needs to contain all items so user code can refer to them.
+to_eval = []
+for track_index, track in enumerate(reapy.Project().tracks):
+    for item_index, item in enumerate(track.items):
+        take = item.active_take
+        if take.name.startswith("="):
+            # Expression clip: may need to evaluate name
+            to_eval.append((track_index, item_index, item, take))
+        else:
+            namespace[take.name] = [note.infos for note in take.notes]
+
+# Make directory for generated audio clips
+audio_dir = os.path.join(reapy.Project().path, "lambdaw")
+os.makedirs(audio_dir, exist_ok=True)
