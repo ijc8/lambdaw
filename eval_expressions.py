@@ -1,3 +1,4 @@
+import aleatora.streams.audio
 import array
 import itertools
 import os
@@ -7,6 +8,7 @@ from typing import List
 import reapy
 
 sample_rate = 48000
+aleatora.streams.audio.SAMPLE_RATE = sample_rate
 
 def generate_wave(filename, it):
     # NOTE: Avoiding numpy due to segfault on reload: https://github.com/numpy/numpy/issues/11925
@@ -62,9 +64,11 @@ def transpose(notes, amount):
     return [{**note, "pitch": note["pitch"] + amount} for note in notes]
 
 namespace = {"note": note, "transpose": transpose, "sr": sample_rate}
-exec("from math import *; from random import *", namespace)
+exec("from aleatora import *; from math import *; from random import *", namespace)
 
 to_derive: List[reapy.Take] = []
+
+generated_audio = False
 
 with reapy.undo_block("Evaluate all clips"):
     for track_index, track in enumerate(p.tracks):
@@ -97,6 +101,8 @@ with reapy.undo_block("Evaluate all clips"):
                 # TODO: In what circumstances do we need to delete the old source?
                 source = reapy.RPR.PCM_Source_CreateFromFile(filename)
                 reapy.RPR.SetMediaItemTake_Source(take.id, source)
+            generated_audio = True
 
-# TODO: Instead use command 40441 to rebuild only peaks for generated audio clips.
-reapy.RPR.Main_OnCommand(40048, 0)
+if generated_audio:
+    # TODO: Instead use command 40441 to rebuild only peaks for generated audio clips.
+    reapy.RPR.Main_OnCommand(40048, 0)
