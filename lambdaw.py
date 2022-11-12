@@ -3,6 +3,7 @@ import array
 import itertools
 import os
 from pathlib import Path
+import sys
 import wave
 
 import reapy
@@ -72,11 +73,10 @@ def eval_takes(selected=False):
                 take.add_note(**note)
         else:
             filename = f"track{track_index}_item{item_index}.wav"
-            filename = os.path.join(lambdaw_dir, filename)
             generate_wave(filename, itertools.islice(output, int(take.item.length * sample_rate)))
             if take.source.filename != filename:
                 # TODO: In what circumstances do we need to delete the old source?
-                source = reapy.RPR.PCM_Source_CreateFromFile(filename)
+                source = reapy.RPR.PCM_Source_CreateFromFile(os.path.join(lambdaw_dir, filename))
                 reapy.RPR.SetMediaItemTake_Source(take.id, source)
             generated_audio = True
 
@@ -97,10 +97,15 @@ namespace = {"note": note, "transpose": transpose, "sr": sample_rate}
 exec("from aleatora import *; from math import *; from random import *", namespace)
 
 lambdaw_dir = os.path.join(reapy.Project().path, "lambdaw")
-module_path = Path(os.path.join(lambdaw_dir, "project.py"))
+
+# Make directory for generated audio clips
+os.makedirs(lambdaw_dir, exist_ok=True)
+os.chdir(lambdaw_dir)
+
+module_path = Path("project.py")
 if not module_path.exists():
     module_path.touch()
-import sys
+
 sys.path.append(lambdaw_dir)
 exec("from project import *", namespace)
 
@@ -115,6 +120,3 @@ for track_index, track in enumerate(reapy.Project().tracks):
             to_eval.append((track_index, item_index, item, take))
         else:
             namespace[take.name] = [note.infos for note in take.notes]
-
-# Make directory for generated audio clips
-os.makedirs(lambdaw_dir, exist_ok=True)
