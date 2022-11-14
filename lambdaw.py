@@ -53,13 +53,11 @@ def peek(it):
         return None
     return (first, itertools.chain((first,), it))
 
-def eval_takes(selected=False):
+def eval_takes(take_info):
     generated_audio = False
-    for track_index, item_index, item, take in to_eval:
-        if selected and not item.is_selected:
-            continue
+    for name, track_index, item_index, take in take_info:
         # Add parenthesis to shorten common case of generator expressions.
-        output = iter(eval("(" + take.name[1:] + ")", namespace))
+        output = iter(eval("(" + name[1:] + ")", namespace))
         # Clear current notes
         while take.n_notes:
             take.notes[0].delete()
@@ -81,10 +79,10 @@ def eval_takes(selected=False):
             generated_audio = True
 
     if generated_audio:
-        # TODO: Instead use command 40441 to rebuild only peaks for generated audio clips.
+        # TODO: Instead use command 40441 to rebuild only peaks for items with generated audio.
         reapy.RPR.Main_OnCommand(40048, 0)
 
-    reapy.RPR.Undo_OnStateChange2(reapy.Project().id, f"lambdaw: evaluate {'selected' if selected else 'all'} clips")
+    reapy.RPR.Undo_OnStateChange2(reapy.Project().id, f"lambdaw: evaluate expressions")
 
 # Functions for user code
 def note(start, dur, pitch, **args):
@@ -111,23 +109,44 @@ if not module_path.exists():
 sys.path.append(lambdaw_dir)
 exec("from project import *", namespace)
 
-# NOTE: Even if we're only re-evaluating a subset of items,
-# the namespace needs to contain all items so user code can refer to them.
-to_eval = []
-for track_index, track in enumerate(reapy.Project().tracks):
-    for item_index, item in enumerate(track.items):
-        take = item.active_take
-        if take.name.startswith("="):
-            # Expression clip: may need to evaluate name
-            to_eval.append((track_index, item_index, item, take))
-        else:
-            namespace[take.name] = [note.infos for note in take.notes]
+def scan_items():
+    # NOTE: Even if we're only re-evaluating a subset of items,
+    # the namespace needs to contain all items so user code can refer to them.
+    snippets = {}
+    for track_index, track in enumerate(reapy.Project().tracks):
+        for item_index, item in enumerate(track.items):
+            take = item.active_take
+            if take.name.startswith("="):
+                # Expression clip: may need to evaluate name
+                snippets[take.id] = (take.name, track_index, item_index, take)
+            else:
+                namespace[take.name] = [note.infos for note in take.notes]
+    return snippets
+
+snippets = scan_items()
+
+counter = 0
 
 def execute(pending):
-    reapy.print("got pending", pending)
-    if pending == "eval_all":
-        eval_takes(False)
-    elif pending == "eval_selected":
-        eval_takes(True)
+    global counter, snippets
+    if not (pending or counter > 3):
+        # Don't check for updates every time.
+        counter += 1
+        return
+    counter = 0
+    old_snippets = snippets
+    snippets = scan_items()
+    changed = set()
+    for key, value in snippets.items():
+        if key not in old_snippets or old_snippets[key][0] != value[0]:
+            changed.add(key)
+    if changed or pending:
+        # reapy.print("changed:", {id: snippets[id][0] for id in changed})
+        filter = {
+            "eval_all": None,
+            "eval_selected": lambda take: take.item.is_selected or take.id in changed,
+            "": lambda take: take.id in changed,
+        }[pending]
+        eval_takes(v for v in snippets.values() if filter(v[-1]))
 
 reapy.print("Loaded lambdaw")
