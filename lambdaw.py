@@ -4,6 +4,7 @@ import itertools
 import os
 from pathlib import Path
 import sys
+import time
 import wave
 
 import reapy
@@ -11,9 +12,9 @@ import reapy
 sample_rate = 48000
 aleatora.streams.audio.SAMPLE_RATE = sample_rate
 
-def generate_wave(filename, it):
+def generate_wave(path, it):
     # NOTE: Avoiding numpy due to segfault on reload: https://github.com/numpy/numpy/issues/11925
-    wav = wave.open(filename, "w")
+    wav = wave.open(path, "w")
     wav.setnchannels(1)
     wav.setsampwidth(2)
     wav.setframerate(sample_rate)
@@ -53,6 +54,21 @@ def peek(it):
         return None
     return (first, itertools.chain((first,), it))
 
+def collect_garbage():
+    # Delete unused lambdaw-generated audio files & reapeaks.
+    files = {os.path.join(audio_dir, f) for f in os.listdir(audio_dir) if f.endswith(".wav")}
+    used = set()
+    # TODO: Maybe avoid going through all the project contents again here.
+    # Instead, perhaps we could get this information in `scan_items` and update it appropriately in `eval_takes`.
+    for track in reapy.Project().tracks:
+        for item in track.items:
+            for take in item.takes:
+                used.add(os.path.abspath(take.source.filename))
+    unused = files - used
+    for file in unused:
+        Path(file).unlink()
+        Path(file + ".reapeaks").unlink(True)
+
 def eval_takes(take_info):
     generated_audio = False
     for name, track_index, item_index, take in take_info:
@@ -70,16 +86,19 @@ def eval_takes(take_info):
             for note in output:
                 take.add_note(**note)
         else:
-            filename = f"track{track_index}_item{item_index}.wav"
-            generate_wave(filename, itertools.islice(output, int(take.item.length * sample_rate)))
-            if take.source.filename != filename:
-                # TODO: In what circumstances do we need to delete the old source?
-                source = reapy.RPR.PCM_Source_CreateFromFile(os.path.join(lambdaw_dir, filename))
-                reapy.RPR.SetMediaItemTake_Source(take.id, source)
+            path = os.path.join(audio_dir, f"track{track_index}_item{item_index}_{time.monotonic_ns()}.wav")
+            generate_wave(path, itertools.islice(output, int(take.item.length * sample_rate)))
+
+            source = reapy.RPR.PCM_Source_CreateFromFile(os.path.join(lambdaw_dir, path))
+            old_source = take.source
+            reapy.RPR.SetMediaItemTake_Source(take.id, source)
+            if Path(old_source.filename).is_relative_to(audio_dir):
+                reapy.RPR.PCM_Source_Destroy(old_source.id)
             generated_audio = True
 
     if generated_audio:
         # TODO: Instead use command 40441 to rebuild only peaks for items with generated audio.
+        collect_garbage()
         reapy.RPR.Main_OnCommand(40048, 0)
 
     reapy.RPR.Undo_OnStateChange2(reapy.Project().id, f"lambdaw: evaluate expressions")
@@ -97,9 +116,10 @@ namespace = {"note": note, "transpose": transpose, "sr": sample_rate}
 exec("from aleatora import *; from math import *; from random import *", namespace)
 
 lambdaw_dir = os.path.join(reapy.Project().path, "lambdaw")
+audio_dir = os.path.abspath(os.path.join(lambdaw_dir, "audio"))
 
 # Make directory for generated audio clips
-os.makedirs(lambdaw_dir, exist_ok=True)
+os.makedirs(audio_dir, exist_ok=True)
 os.chdir(lambdaw_dir)
 
 module_path = Path("project.py")
@@ -143,7 +163,7 @@ def execute(pending):
     if changed or pending:
         # reapy.print("changed:", {id: snippets[id][0] for id in changed})
         filter = {
-            "eval_all": None,
+            "eval_all": lambda _: True,
             "eval_selected": lambda take: take.item.is_selected or take.id in changed,
             "": lambda take: take.id in changed,
         }[pending]
