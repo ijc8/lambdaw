@@ -84,6 +84,8 @@ def eval_takes(selected=False):
         # TODO: Instead use command 40441 to rebuild only peaks for generated audio clips.
         reapy.RPR.Main_OnCommand(40048, 0)
 
+    reapy.RPR.Undo_OnStateChange2(reapy.Project().id, f"lambdaw: evaluate {'selected' if selected else 'all'} clips")
+
 # Functions for user code
 def note(start, dur, pitch, **args):
     return {"start": start, "end": start + dur, "pitch": pitch, **args}
@@ -120,3 +122,12 @@ for track_index, track in enumerate(reapy.Project().tracks):
             to_eval.append((track_index, item_index, item, take))
         else:
             namespace[take.name] = [note.infos for note in take.notes]
+
+def execute(pending):
+    reapy.print("got pending", pending)
+    if pending == "eval_all":
+        eval_takes(False)
+    elif pending == "eval_selected":
+        eval_takes(True)
+
+reapy.print("Loaded lambdaw")
