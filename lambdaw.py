@@ -1,5 +1,6 @@
 import aleatora.streams.audio
 import array
+import importlib
 import itertools
 import os
 from pathlib import Path
@@ -127,6 +128,8 @@ if not module_path.exists():
     module_path.touch()
 
 sys.path.append(lambdaw_dir)
+if "project" in sys.modules:
+    importlib.reload(sys.modules["project"])
 exec("from project import *", namespace)
 
 def scan_items():
