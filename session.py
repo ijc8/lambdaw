@@ -31,7 +31,7 @@ def run_loop():
 
     if pending:
         reapy.delete_ext_state("lambdaw", "pending")
-    ctype_backup = ctypes._pointer_type_cache.copy()
+    ctype_backup.update(ctypes._pointer_type_cache)
     reapy.defer(run_loop)
 
 run_loop()
