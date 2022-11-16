@@ -2,14 +2,21 @@ from math import *
 from random import *
 
 from mingus.core import chords, notes, keys, scales
+import music21 as m21
+
 from aleatora import *
 from aleatora import alternator
 
 def note(start, dur, pitch, **args):
     return {"start": start, "end": start + dur, "pitch": pitch, **args}
 
-def transpose(notes, amount):
-    return [{**note, "pitch": note["pitch"] + amount} for note in notes]
+def transpose(notes, amount, scale=None):
+    if scale is None:
+        return [{**note, "pitch": note["pitch"] + amount} for note in notes]
+    else:
+        scale = m21.scale.MajorScale(scale) if scale.isupper() else m21.scale.MinorScale(scale)
+        return [{**note, "pitch": scale.nextPitch(m21.pitch.Pitch(note["pitch"]), stepSize=amount).midi} for note in notes]
+
 
 def arp(chord_name):
     ns = chords.from_shorthand(chord_name)
