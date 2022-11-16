@@ -4,7 +4,11 @@ import traceback
 
 import reapy
 
-import lambdaw
+lambdaw = None
+try:
+    import lambdaw
+except:
+    reapy.show_message_box(traceback.format_exc(), "lambdaw exception")
 
 reapy.print("started lambdaw session")
 
@@ -16,15 +20,18 @@ reapy.print("started lambdaw session")
 ctype_backup = ctypes._pointer_type_cache.copy()
 
 def run_loop():
-    global ctype_backup
+    global lambdaw, ctype_backup
     ctypes._pointer_type_cache.update(ctype_backup)
 
     pending = reapy.get_ext_state("lambdaw", "pending")
     try:
-        if pending == "reload":
-            importlib.reload(lambdaw)
+        if pending == "reload" or (pending and not lambdaw):
+            if lambdaw is None:
+                import lambdaw
+            else:
+                importlib.reload(lambdaw)
             reapy.print("Reloaded lambdaw")
-        else:
+        if pending != "reload" and lambdaw:
             lambdaw.execute(pending)
     except:
         reapy.show_message_box(traceback.format_exc(), "lambdaw exception")
