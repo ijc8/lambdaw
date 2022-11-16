@@ -10,6 +10,7 @@ try:
 except:
     reapy.show_message_box(traceback.format_exc(), "lambdaw exception")
 
+reapy.delete_ext_state("lambdaw", "pending")
 reapy.print("started lambdaw session")
 
 # HACK: Crazy workaround for issue with REAPER's Python support.
