@@ -72,9 +72,9 @@ def collect_garbage():
 
 def eval_takes(take_info):
     generated_audio = False
-    for name, track_index, item_index, take in take_info:
+    for name, expression, track_index, item_index, take in take_info:
         # Add parenthesis to shorten common case of generator expressions.
-        output = iter(eval("(" + name[1:] + ")", namespace))
+        output = iter(eval("(" + expression + ")", namespace))
         # Clear current notes
         while take.n_notes:
             take.notes[0].delete()
@@ -130,11 +130,13 @@ def scan_items():
     for track_index, track in enumerate(reapy.Project().tracks):
         for item_index, item in enumerate(track.items):
             take = item.active_take
-            if take.name.startswith("="):
+            var_name, *expression = take.name.split("=", 1)
+            expression = expression[0] if expression else None
+            if expression:
                 # Expression clip: may need to evaluate name
-                snippets[take.id] = (take.name, track_index, item_index, take)
-            else:
-                namespace[take.name] = [note.infos for note in take.notes]
+                snippets[take.id] = (take.name, expression, track_index, item_index, take)
+            # TODO: Also handle audio takes
+            namespace[var_name] = [note.infos for note in take.notes]
     return snippets
 
 snippets = scan_items()
