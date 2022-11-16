@@ -104,17 +104,8 @@ def eval_takes(take_info):
 
     reapy.RPR.Undo_OnStateChange2(reapy.Project().id, f"lambdaw: evaluate expressions")
 
-# Functions for user code
-def note(start, dur, pitch, **args):
-    return {"start": start, "end": start + dur, "pitch": pitch, **args}
-
-def transpose(notes, amount):
-    return [{**note, "pitch": note["pitch"] + amount} for note in notes]
-
 # Setup namespace for user code
-# TODO: Move this stuff to project module template.
-namespace = {"note": note, "transpose": transpose, "sr": sample_rate}
-exec("from aleatora import *; from math import *; from random import *", namespace)
+namespace = {"sr": sample_rate}
 
 lambdaw_dir = os.path.join(reapy.Project().path, "lambdaw")
 audio_dir = os.path.abspath(os.path.join(lambdaw_dir, "audio"))
