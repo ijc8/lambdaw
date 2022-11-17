@@ -7,11 +7,12 @@ import reapy
 lambdaw = None
 try:
     import lambdaw
+    needs_load = False
 except:
     reapy.show_message_box(traceback.format_exc(), "lambdaw exception")
+    needs_load = True
 
 reapy.delete_ext_state("lambdaw", "pending")
-reapy.print("started lambdaw session")
 
 # HACK: Crazy workaround for issue with REAPER's Python support.
 # Every time REAPER runs a Python script, ctypes is reimported and resets its pointer type cache.
@@ -21,17 +22,20 @@ reapy.print("started lambdaw session")
 ctype_backup = ctypes._pointer_type_cache.copy()
 
 def run_loop():
-    global lambdaw, ctype_backup
+    global lambdaw, needs_load, ctype_backup
     ctypes._pointer_type_cache.update(ctype_backup)
 
     pending = reapy.get_ext_state("lambdaw", "pending")
     try:
         if pending == "reload" or (pending and not lambdaw):
+            needs_load = True
+        if needs_load:
             if lambdaw is None:
                 import lambdaw
             else:
                 importlib.reload(lambdaw)
-            reapy.print("Reloaded lambdaw")
+            reapy.show_message_box("Reloaded module.", "lambdaw", "ok")
+            needs_load = False
         if pending != "reload" and lambdaw:
             lambdaw.execute(pending)
     except:
