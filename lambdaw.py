@@ -70,32 +70,54 @@ def collect_garbage():
         Path(file).unlink()
         Path(file + ".reapeaks").unlink(True)
 
+# TODO: Maybe make the conversions user-customizable via project module?
+def convert_input(take):
+    take_start = take.item.position - take.start_offset
+    def convert_note(note):
+        infos = note.infos
+        # TODO: Maybe use beats/PPQ instead of seconds. (The conversion is due to reapy.)
+        infos["dur"] = infos["start"] - infos["end"]
+        infos["start"] -= take_start
+        infos["end"] -= take_start
+        return infos
+    # TODO: Also handle audio takes
+    return [convert_note(note) for note in take.notes]
+
+def convert_output(output, track_index, item_index, take):
+    def convert_note(note):
+        # NOTE: We don't add back `take_start` here due to reapy inconsistency.
+        if "dur" in note:
+            del note["dur"]
+        return note
+    # Clear current notes
+    while take.n_notes:
+        take.notes[0].delete()
+    peeked = peek(output)
+    if peeked is None:
+        return
+    first, output = peeked
+    if isinstance(first, dict):
+        if not take.is_midi:
+            create_midi_source(take)
+        for note in output:
+            take.add_note(**convert_note(note))
+    else:
+        path = os.path.join(audio_dir, f"track{track_index}_item{item_index}_{time.monotonic_ns()}.wav")
+        generate_wave(path, itertools.islice(output, int(take.item.length * sample_rate)))
+
+        source = reapy.RPR.PCM_Source_CreateFromFile(os.path.join(lambdaw_dir, path))
+        old_source = take.source
+        reapy.RPR.SetMediaItemTake_Source(take.id, source)
+        if Path(old_source.filename).is_relative_to(audio_dir):
+            reapy.RPR.PCM_Source_Destroy(old_source.id)
+        generated_audio = True
+
 def eval_takes(take_info):
     generated_audio = False
     for name, expression, track_index, item_index, take in take_info:
         # Add parenthesis to shorten common case of generator expressions.
         output = iter(eval("(" + expression + ")", namespace))
-        # Clear current notes
-        while take.n_notes:
-            take.notes[0].delete()
-        peeked = peek(output)
-        if peeked is None: continue
-        first, output = peeked
-        if isinstance(first, dict):
-            if not take.is_midi:
-                create_midi_source(take)
-            for note in output:
-                take.add_note(**note)
-        else:
-            path = os.path.join(audio_dir, f"track{track_index}_item{item_index}_{time.monotonic_ns()}.wav")
-            generate_wave(path, itertools.islice(output, int(take.item.length * sample_rate)))
-
-            source = reapy.RPR.PCM_Source_CreateFromFile(os.path.join(lambdaw_dir, path))
-            old_source = take.source
-            reapy.RPR.SetMediaItemTake_Source(take.id, source)
-            if Path(old_source.filename).is_relative_to(audio_dir):
-                reapy.RPR.PCM_Source_Destroy(old_source.id)
-            generated_audio = True
+        convert_output(output, track_index, item_index, take)
 
     if generated_audio:
         # TODO: Instead use command 40441 to rebuild only peaks for items with generated audio.
@@ -133,10 +155,9 @@ def scan_items():
             var_name, *expression = take.name.split("=", 1)
             expression = expression[0] if expression else None
             if expression:
-                # Expression clip: may need to evaluate name
+                # Expression item: may need evaluation
                 snippets[take.id] = (take.name, expression, track_index, item_index, take)
-            # TODO: Also handle audio takes
-            namespace[var_name] = [note.infos for note in take.notes]
+            namespace[var_name] = convert_input(take)
     return snippets
 
 snippets = scan_items()
@@ -164,5 +185,3 @@ def execute(pending):
             "": lambda take: take.id in changed,
         }[pending]
         eval_takes(v for v in snippets.values() if filter(v[-1]))
-
-reapy.print("Loaded lambdaw")
