@@ -20,7 +20,7 @@ def generate_wave(path, it):
     wav.setsampwidth(2)
     wav.setframerate(sample_rate)
     scale = 2**15 - 1
-    audio = array.array('h', (int(x * scale) for x in it))
+    audio = array.array('h', (int(max(-1, min(x, 1)) * scale) for x in it))
     wav.writeframes(audio)
     wav.close()
 
@@ -101,6 +101,7 @@ def convert_output(output, track_index, item_index, take):
             create_midi_source(take)
         for note in output:
             take.add_note(**convert_note(note))
+        return False
     else:
         path = os.path.join(audio_dir, f"track{track_index}_item{item_index}_{time.monotonic_ns()}.wav")
         generate_wave(path, itertools.islice(output, int(take.item.length * sample_rate)))
@@ -110,16 +111,16 @@ def convert_output(output, track_index, item_index, take):
         reapy.RPR.SetMediaItemTake_Source(take.id, source)
         if Path(old_source.filename).is_relative_to(audio_dir):
             reapy.RPR.PCM_Source_Destroy(old_source.id)
-        generated_audio = True
+        return True
 
 def eval_takes(take_info):
-    generated_audio = False
+    rebuild_peaks = False
     for name, expression, track_index, item_index, take in take_info:
         # Add parenthesis to shorten common case of generator expressions.
         output = iter(eval("(" + expression + ")", namespace))
-        convert_output(output, track_index, item_index, take)
+        rebuild_peaks |= convert_output(output, track_index, item_index, take)
 
-    if generated_audio:
+    if rebuild_peaks:
         # TODO: Instead use command 40441 to rebuild only peaks for items with generated audio.
         collect_garbage()
         reapy.RPR.Main_OnCommand(40048, 0)
