@@ -173,17 +173,16 @@ def execute(pending):
         counter += 1
         return
     counter = 0
+
+    # Check for new/updated expressions in take names
     old_snippets = snippets
     snippets = scan_items()
     changed = set()
     # Don't scan for renamed clips if the user switched projects.
     # TODO: Better support for working in multiple projects.
-    if reapy.Project() == project:
-        for key, value in snippets.items():
-            if key not in old_snippets or old_snippets[key][0] != value[0]:
-                changed.add(key)
-    else:
-        project = reapy.Project()
+    for key, value in snippets.items():
+        if key not in old_snippets or old_snippets[key][0] != value[0]:
+            changed.add(key)
     if changed or pending:
         # reapy.print("changed:", {id: snippets[id][0] for id in changed})
         filter = {
