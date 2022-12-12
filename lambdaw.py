@@ -113,17 +113,27 @@ def convert_output(output, track_index, item_index, take):
             reapy.RPR.PCM_Source_Destroy(old_source.id)
         return True
 
+def build_peaks(source):
+    result = reapy.RPR.PCM_Source_BuildPeaks(source.id, 0)
+    reapy.print(0, result)
+    if result != 0:
+        while (result := reapy.RPR.PCM_Source_BuildPeaks(source.id, 1)) != 0:
+            reapy.print(1, result)
+    reapy.RPR.PCM_Source_BuildPeaks(source.id, 2)
+
 def eval_takes(take_info):
-    rebuild_peaks = False
+    generated_audio = False
     for name, expression, track_index, item_index, take in take_info:
         # Add parenthesis to shorten common case of generator expressions.
         output = iter(eval("(" + expression + ")", namespace))
-        rebuild_peaks |= convert_output(output, track_index, item_index, take)
+        rebuild_peaks = convert_output(output, track_index, item_index, take)
+        if rebuild_peaks:
+            build_peaks(take.source)
+        generated_audio |= rebuild_peaks
 
-    if rebuild_peaks:
-        # TODO: Instead use command 40441 to rebuild only peaks for items with generated audio.
+    if generated_audio:
         collect_garbage()
-        reapy.RPR.Main_OnCommand(40048, 0)
+        reapy.update_arrange()
 
     reapy.RPR.Undo_OnStateChange2(reapy.Project().id, f"lambdaw: evaluate expressions")
 
@@ -166,6 +176,8 @@ project = reapy.Project()
 
 counter = 0
 
+CYCLE_LENGTH = 2  # seconds
+
 def execute(pending):
     global counter, snippets, project
     if not (pending or counter > 3):
@@ -173,6 +185,21 @@ def execute(pending):
         counter += 1
         return
     counter = 0
+
+    # Check for expressions in track names (livecoding mode)
+    if project.is_playing:
+        for track in project.tracks:
+            if track.name.startswith("="):
+                reapy.print(track.name, project.play_position)
+                next_cycle_start = (project.play_position // CYCLE_LENGTH + 1) * CYCLE_LENGTH
+                next_cycle_end = next_cycle_start + CYCLE_LENGTH
+                for item in track.items:
+                    if item.position < next_cycle_end and item.position + item.length > next_cycle_start:
+                        break  # found an item there already
+                else:
+                    item = track.add_item(next_cycle_start, next_cycle_end)
+                    take = item.add_take()
+                    reapy.RPR.GetSetMediaItemTakeInfo_String(take.id, "P_NAME", track.name, True)
 
     # Check for new/updated expressions in take names
     old_snippets = snippets
