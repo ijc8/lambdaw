@@ -187,7 +187,7 @@ def execute(pending):
     counter = 0
 
     # Check for expressions in track names (livecoding mode)
-    if project.is_playing:
+    if project.is_recording:
         for track in project.tracks:
             if track.name.startswith("="):
                 reapy.print(track.name, project.play_position)
@@ -205,8 +205,6 @@ def execute(pending):
     old_snippets = snippets
     snippets = scan_items()
     changed = set()
-    # Don't scan for renamed clips if the user switched projects.
-    # TODO: Better support for working in multiple projects.
     for key, value in snippets.items():
         if key not in old_snippets or old_snippets[key][0] != value[0]:
             changed.add(key)
