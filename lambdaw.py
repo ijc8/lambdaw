@@ -151,9 +151,14 @@ module_path = Path("project.py")
 if not module_path.exists():
     module_path.touch()
 
-sys.path.append(lambdaw_dir)
-if "project" in sys.modules:
-    importlib.reload(sys.modules["project"])
+# Load user project module by path.
+# See https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
+# We need to do it this way instead of just modifying sys.path in order to
+# deal with having multiple "project" modules - one per Reaper project.
+spec = importlib.util.spec_from_file_location("project", module_path)
+user_project_module = importlib.util.module_from_spec(spec)
+sys.modules["project"] = user_project_module
+spec.loader.exec_module(user_project_module)
 exec("from project import *", namespace)
 
 def scan_items():
@@ -178,8 +183,11 @@ counter = 0
 
 CYCLE_LENGTH = 2  # seconds
 
+# track -> take
+next_cycle_items = {}
+
 def execute(pending):
-    global counter, snippets, project
+    global counter, snippets, project, next_cycle_items
     if not (pending or counter > 3):
         # Don't check for updates every time.
         counter += 1
@@ -190,6 +198,10 @@ def execute(pending):
     if project.is_recording:
         for track in project.tracks:
             if track.name.startswith("="):
+                if track.id in next_cycle_items and next_cycle_items[track.id].name != track.name:
+                    take = next_cycle_items[track.id]
+                    reapy.RPR.GetSetMediaItemTakeInfo_String(take.id, "P_NAME", track.name, True)
+                    next_cycle_items[track.id] = take
                 reapy.print(track.name, project.play_position)
                 next_cycle_start = (project.play_position // CYCLE_LENGTH + 1) * CYCLE_LENGTH
                 next_cycle_end = next_cycle_start + CYCLE_LENGTH
@@ -198,8 +210,19 @@ def execute(pending):
                         break  # found an item there already
                 else:
                     item = track.add_item(next_cycle_start, next_cycle_end)
+                    # Visually indicate that next cycle is pending using item lock
+                    item.set_info_value("C_LOCK", 1)
                     take = item.add_take()
                     reapy.RPR.GetSetMediaItemTakeInfo_String(take.id, "P_NAME", track.name, True)
+                    old_take = next_cycle_items.get(track.id, None)
+                    if old_take:
+                        old_take.item.set_info_value("C_LOCK", 0)
+                    next_cycle_items[track.id] = take
+    else:
+        for take in next_cycle_items.values():
+            take.item.delete()
+        next_cycle_items = {}
+        reapy.update_arrange()
 
     # Check for new/updated expressions in take names
     old_snippets = snippets
