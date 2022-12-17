@@ -115,10 +115,9 @@ def convert_output(output, track_index, item_index, take):
 
 def build_peaks(source):
     result = reapy.RPR.PCM_Source_BuildPeaks(source.id, 0)
-    reapy.print(0, result)
     if result != 0:
         while (result := reapy.RPR.PCM_Source_BuildPeaks(source.id, 1)) != 0:
-            reapy.print(1, result)
+            pass
     reapy.RPR.PCM_Source_BuildPeaks(source.id, 2)
 
 def eval_takes(take_info):
@@ -202,7 +201,6 @@ def execute(pending):
                     take = next_cycle_items[track.id]
                     reapy.RPR.GetSetMediaItemTakeInfo_String(take.id, "P_NAME", track.name, True)
                     next_cycle_items[track.id] = take
-                reapy.print(track.name, project.play_position)
                 next_cycle_start = (project.play_position // CYCLE_LENGTH + 1) * CYCLE_LENGTH
                 next_cycle_end = next_cycle_start + CYCLE_LENGTH
                 for item in track.items:
