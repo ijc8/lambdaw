@@ -129,10 +129,13 @@ def build_peaks(source):
 
 def eval_takes(take_info):
     generated_audio = False
-    for name, expression, track_index, item_index, take in take_info:
+    for var_name, expression, track_index, item_index, take in take_info:
         # Add parenthesis to shorten common case of generator expressions.
         output = eval("(" + expression + ")", namespace)
         rebuild_peaks = output_converter(output, track_index, item_index, take)
+        # Update value in namespace immediately.
+        # reapy.print(f"EVAL: set {var_name} to {namespace[var_name]}")
+        namespace[var_name] = input_converter(take)
         if rebuild_peaks:
             build_peaks(take.source)
         generated_audio |= rebuild_peaks
@@ -178,8 +181,8 @@ def scan_items():
             expression = expression[0] if expression else None
             if expression:
                 # Expression item: may need evaluation
-                snippets[take.id] = (take.name, expression, track_index, item_index, take)
-            namespace[var_name] = input_converter(take)
+                snippets[take.id] = (var_name, expression, track_index, item_index, take)
+            # reapy.print(f"SCAN: set {var_name} to {namespace[var_name]}")
     return snippets
 
 snippets = scan_items()
@@ -192,6 +195,10 @@ CYCLE_LENGTH = project.time_signature[1] / project.time_signature[0] * 60  # sec
 # track -> take
 next_cycle_items = {}
 
+def is_expression_name(name):
+    before, *after = name.split("=", 1)
+    return after and (before == "" or before.isidentifier())
+
 def execute(pending):
     global counter, snippets, project, next_cycle_items
     if not (pending or counter > 3):
@@ -201,9 +208,11 @@ def execute(pending):
     counter = 0
 
     # Check for expressions in track names (livecoding mode)
+    # TODO: Extract to separate function
+    new_cycle_items = set()
     if project.is_recording:
         for track in project.tracks:
-            if track.name.startswith("="):
+            if is_expression_name(track.name):
                 if track.id in next_cycle_items and next_cycle_items[track.id].name != track.name:
                     take = next_cycle_items[track.id]
                     reapy.RPR.GetSetMediaItemTakeInfo_String(take.id, "P_NAME", track.name, True)
@@ -223,19 +232,28 @@ def execute(pending):
                     if old_take:
                         old_take.item.set_info_value("C_LOCK", 0)
                     next_cycle_items[track.id] = take
+                    new_cycle_items.add(take.id)
     else:
         for take in next_cycle_items.values():
             take.item.delete()
         next_cycle_items = {}
         reapy.update_arrange()
 
-    # Check for new/updated expressions in take names
     old_snippets = snippets
     snippets = scan_items()
+    # TODO: Only convert *last* copy with name.
+    for id, (var_name, expression, track_index, item_index, take) in snippets.items():
+        # Avoid reading in items newly-generated from tracks, which are empty.
+        if id not in new_cycle_items:
+            namespace[var_name] = input_converter(take)
+
     changed = set()
     for key, value in snippets.items():
         if key not in old_snippets or old_snippets[key][0] != value[0]:
             changed.add(key)
+
+    # Check for new/updated expressions in take names
+    # reapy.print("TICK")
     if changed or pending:
         # reapy.print("changed:", {id: snippets[id][0] for id in changed})
         filter = {
