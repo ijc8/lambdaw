@@ -187,7 +187,7 @@ project = reapy.Project()
 
 counter = 0
 
-CYCLE_LENGTH = 2  # seconds
+CYCLE_LENGTH = project.time_signature[1] / project.time_signature[0] * 60  # seconds
 
 # track -> take
 next_cycle_items = {}
