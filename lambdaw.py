@@ -1,4 +1,3 @@
-import aleatora.streams.audio
 import array
 import importlib
 import itertools
@@ -10,15 +9,14 @@ import wave
 
 import reapy
 
-sample_rate = 48000
-aleatora.streams.audio.SAMPLE_RATE = sample_rate
+SAMPLE_RATE = 48000
 
 def generate_wave(path, it):
     # NOTE: Avoiding numpy due to segfault on reload: https://github.com/numpy/numpy/issues/11925
     wav = wave.open(path, "w")
     wav.setnchannels(1)
     wav.setsampwidth(2)
-    wav.setframerate(sample_rate)
+    wav.setframerate(SAMPLE_RATE)
     scale = 2**15 - 1
     audio = array.array('h', (int(max(-1, min(x, 1)) * scale) for x in it))
     wav.writeframes(audio)
@@ -137,7 +135,7 @@ def eval_takes(take_info):
     reapy.RPR.Undo_OnStateChange2(reapy.Project().id, f"lambdaw: evaluate expressions")
 
 # Setup namespace for user code
-namespace = {"sr": sample_rate}
+namespace = {"sr": SAMPLE_RATE}
 
 lambdaw_dir = os.path.join(reapy.Project().path, "lambdaw")
 audio_dir = os.path.abspath(os.path.join(lambdaw_dir, "audio"))
