@@ -46,11 +46,12 @@ E {int(ticks*(end - start))} b0 7b 00
     state = "\n".join(lines)
     reapy.RPR.SetItemStateChunk(take.item.id, state, size)
 
-def peek(it):
+def peek(iterable, default=None):
+    it = iter(iterable)
     try:
         first = next(it)
     except StopIteration:
-        return None
+        return (default, ())
     return (first, itertools.chain((first,), it))
 
 def collect_garbage():
@@ -91,8 +92,6 @@ def convert_output(output, track_index, item_index, take):
     while take.n_notes:
         take.notes[0].delete()
     peeked = peek(output)
-    if peeked is None:
-        return
     first, output = peeked
     if isinstance(first, dict):
         if not take.is_midi:
@@ -102,7 +101,7 @@ def convert_output(output, track_index, item_index, take):
         return False
     else:
         path = os.path.join(audio_dir, f"track{track_index}_item{item_index}_{time.monotonic_ns()}.wav")
-        generate_wave(path, itertools.islice(output, int(take.item.length * sample_rate)))
+        generate_wave(path, itertools.islice(output, int(take.item.length * SAMPLE_RATE)))
 
         source = reapy.RPR.PCM_Source_CreateFromFile(os.path.join(lambdaw_dir, path))
         old_source = take.source
@@ -110,6 +109,16 @@ def convert_output(output, track_index, item_index, take):
         if Path(old_source.filename).is_relative_to(audio_dir):
             reapy.RPR.PCM_Source_Destroy(old_source.id)
         return True
+
+input_converter = convert_input
+output_converter = convert_output
+
+def register_converters(input=None, output=None):
+    global input_converter, output_converter
+    if input is not None:
+        input_converter = input
+    if output is not None:
+        output_converter = output
 
 def build_peaks(source):
     result = reapy.RPR.PCM_Source_BuildPeaks(source.id, 0)
@@ -122,8 +131,8 @@ def eval_takes(take_info):
     generated_audio = False
     for name, expression, track_index, item_index, take in take_info:
         # Add parenthesis to shorten common case of generator expressions.
-        output = iter(eval("(" + expression + ")", namespace))
-        rebuild_peaks = convert_output(output, track_index, item_index, take)
+        output = eval("(" + expression + ")", namespace)
+        rebuild_peaks = output_converter(output, track_index, item_index, take)
         if rebuild_peaks:
             build_peaks(take.source)
         generated_audio |= rebuild_peaks
@@ -170,7 +179,7 @@ def scan_items():
             if expression:
                 # Expression item: may need evaluation
                 snippets[take.id] = (take.name, expression, track_index, item_index, take)
-            namespace[var_name] = convert_input(take)
+            namespace[var_name] = input_converter(take)
     return snippets
 
 snippets = scan_items()
