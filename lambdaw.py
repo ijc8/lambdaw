@@ -5,6 +5,7 @@ import os
 from pathlib import Path
 import sys
 import time
+import typing
 import wave
 
 import reapy
@@ -69,8 +70,7 @@ def collect_garbage():
         Path(file).unlink()
         Path(file + ".reapeaks").unlink(True)
 
-# TODO: Maybe make the conversions user-customizable via project module?
-def convert_input(take):
+def convert_input(take: reapy.Take):
     take_start = take.item.position - take.start_offset
     def convert_note(note):
         infos = note.infos
@@ -79,8 +79,15 @@ def convert_input(take):
         infos["start"] -= take_start
         infos["end"] -= take_start
         return infos
-    # TODO: Also handle audio takes
-    return [convert_note(note) for note in take.notes]
+    if take.is_midi:
+        return [convert_note(note) for note in take.notes]
+    else:
+        # TODO: Should do this lazily to avoid loading all
+        # audio in memory, in case of long items.
+        accessor = take.add_audio_accessor()
+        length = int((accessor.end_time - accessor.start_time) * SAMPLE_RATE)
+        return accessor.get_samples(0, length, sample_rate=SAMPLE_RATE)
+
 
 def convert_output(output, track_index, item_index, take):
     def convert_note(note):
