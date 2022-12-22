@@ -20,4 +20,4 @@ Until then, you can try it by cloning the repo, running `session.py` as a script
 
 If you are interested it trying LambDAW, feel free to contact [the author](https://ijc8.me).
 
-[^1]: Any substrings related to lambs are purely coincidental, and no animals were harmed in the making of this software.
+[^1]: Any substrings related to lambs or other young ovines are purely coincidental, and no animals were harmed in the making of this software.
