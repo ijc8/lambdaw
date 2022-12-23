@@ -16,7 +16,7 @@ SAMPLE_RATE = 48000
 
 def generate_wave(name, it):
     # NOTE: Avoiding numpy due to segfault on reload: https://github.com/numpy/numpy/issues/11925
-    path = os.path.join(audio_dir, name + ".wav")
+    path = os.path.join(media_dir, name + ".wav")
     wav = wave.open(path, "w")
     wav.setnchannels(1)
     wav.setsampwidth(2)
@@ -28,10 +28,9 @@ def generate_wave(name, it):
     return path
 
 def generate_video(name, it):
-    path = os.path.join(audio_dir, name + ".mp4")
+    path = os.path.join(media_dir, name + ".mp4")
     fps = 30
     width, height = 1280, 720
-    frames = fps * 10
     process = (
         ffmpeg
             .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.format(width, height), framerate=fps)
@@ -40,9 +39,7 @@ def generate_video(name, it):
             .run_async(pipe_stdin=True)
     )
 
-    for i in range(frames):
-        print(f'{i / frames * 100}%')
-        frame = np.random.random((width, height, 3))
+    for i, frame in enumerate(it):
         process.stdin.write((frame * 255).astype(np.uint8))
 
     process.stdin.close()
@@ -83,7 +80,7 @@ def peek(iterable, default=None):
 
 def collect_garbage():
     # Delete unused lambdaw-generated audio files & reapeaks.
-    files = {os.path.join(audio_dir, f) for f in os.listdir(audio_dir) if f.endswith(".wav")}
+    files = {os.path.join(media_dir, f) for f in os.listdir(media_dir) if f.startswith("track")}
     used = set()
     # TODO: Maybe avoid going through all the project contents again here.
     # Instead, perhaps we could get this information in `scan_items` and update it appropriately in `eval_takes`.
@@ -148,7 +145,7 @@ def convert_output(output, track_index, item_index, take):
         source = reapy.RPR.PCM_Source_CreateFromFile(os.path.join(lambdaw_dir, path))
         old_source = take.source
         reapy.RPR.SetMediaItemTake_Source(take.id, source)
-        if Path(old_source.filename).is_relative_to(audio_dir):
+        if Path(old_source.filename).is_relative_to(media_dir):
             reapy.RPR.PCM_Source_Destroy(old_source.id)
         return True
 
@@ -192,10 +189,10 @@ def eval_takes(take_info):
 namespace = {"sr": SAMPLE_RATE}
 
 lambdaw_dir = os.path.join(reapy.Project().path, "lambdaw")
-audio_dir = os.path.abspath(os.path.join(lambdaw_dir, "audio"))
+media_dir = os.path.abspath(os.path.join(lambdaw_dir, "audio"))
 
 # Make directory for generated audio clips
-os.makedirs(audio_dir, exist_ok=True)
+os.makedirs(media_dir, exist_ok=True)
 os.chdir(lambdaw_dir)
 
 module_path = Path("project.py")
