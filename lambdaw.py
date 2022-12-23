@@ -8,12 +8,15 @@ import time
 import typing
 import wave
 
+import ffmpeg
+import numpy as np
 import reapy
 
 SAMPLE_RATE = 48000
 
-def generate_wave(path, it):
+def generate_wave(name, it):
     # NOTE: Avoiding numpy due to segfault on reload: https://github.com/numpy/numpy/issues/11925
+    path = os.path.join(audio_dir, name + ".wav")
     wav = wave.open(path, "w")
     wav.setnchannels(1)
     wav.setsampwidth(2)
@@ -22,6 +25,29 @@ def generate_wave(path, it):
     audio = array.array('h', (int(max(-1, min(x, 1)) * scale) for x in it))
     wav.writeframes(audio)
     wav.close()
+    return path
+
+def generate_video(name, it):
+    path = os.path.join(audio_dir, name + ".mp4")
+    fps = 30
+    width, height = 1280, 720
+    frames = fps * 10
+    process = (
+        ffmpeg
+            .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.format(width, height), framerate=fps)
+            .output(path, pix_fmt='yuv420p', vcodec='libx264', r=fps)
+            .overwrite_output()
+            .run_async(pipe_stdin=True)
+    )
+
+    for i in range(frames):
+        print(f'{i / frames * 100}%')
+        frame = np.random.random((width, height, 3))
+        process.stdin.write((frame * 255).astype(np.uint8))
+
+    process.stdin.close()
+    process.wait()
+    return path
 
 def create_midi_source(take):
     # Create a new, blank MIDI source that is the length of its container.
@@ -113,8 +139,11 @@ def convert_output(output, track_index, item_index, take):
             take.add_note(**convert_note(note))
         return False
     else:
-        path = os.path.join(audio_dir, f"track{track_index}_item{item_index}_{time.monotonic_ns()}.wav")
-        generate_wave(path, itertools.islice(output, int(take.item.length * SAMPLE_RATE)))
+        name = f"track{track_index}_item{item_index}_{time.monotonic_ns()}"
+        if isinstance(first, np.ndarray):
+            path = generate_video(name, output)
+        else:
+            path = generate_wave(name, itertools.islice(output, int(take.item.length * SAMPLE_RATE)))
 
         source = reapy.RPR.PCM_Source_CreateFromFile(os.path.join(lambdaw_dir, path))
         old_source = take.source
