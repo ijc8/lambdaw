@@ -82,13 +82,17 @@ def convert_input(take: reapy.Take):
     if take.is_midi:
         return [convert_note(note) for note in take.notes]
     else:
-        # TODO: Should do this lazily to avoid loading all
-        # audio in memory, in case of long items.
-        accessor = take.add_audio_accessor()
-        length = int((accessor.end_time - accessor.start_time) * SAMPLE_RATE)
-        audio = accessor.get_samples(0, length, sample_rate=SAMPLE_RATE)
-        accessor.delete()
-        return audio
+        def generator():
+            accessor = take.add_audio_accessor()
+            length = int((accessor.end_time - accessor.start_time) * SAMPLE_RATE)
+            chunk_size = 4096
+            for i in range(0, length, chunk_size):
+                chunk = accessor.get_samples(i / SAMPLE_RATE, chunk_size, sample_rate=SAMPLE_RATE)
+                yield from chunk
+            # TODO: Does accessor still get cleaned up if expression doesn't exhaust this generator?
+            # I suspect not. Might need to implement __del__ on something - ideally reapy's AudioAccessor class.
+            accessor.delete()
+        return generator()
 
 
 def convert_output(output, track_index, item_index, take):
