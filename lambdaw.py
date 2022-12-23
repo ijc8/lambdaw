@@ -86,7 +86,9 @@ def convert_input(take: reapy.Take):
         # audio in memory, in case of long items.
         accessor = take.add_audio_accessor()
         length = int((accessor.end_time - accessor.start_time) * SAMPLE_RATE)
-        return accessor.get_samples(0, length, sample_rate=SAMPLE_RATE)
+        audio = accessor.get_samples(0, length, sample_rate=SAMPLE_RATE)
+        accessor.delete()
+        return audio
 
 
 def convert_output(output, track_index, item_index, take):
