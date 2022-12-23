@@ -262,7 +262,7 @@ def execute(pending):
 
     changed = set()
     for key, value in snippets.items():
-        if key not in old_snippets or old_snippets[key][0] != value[0]:
+        if key not in old_snippets or old_snippets[key][1] != value[1]:
             changed.add(key)
 
     # Check for new/updated expressions in take names
