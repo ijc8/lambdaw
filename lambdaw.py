@@ -192,9 +192,8 @@ def scan_items():
             take = item.active_take
             var_name, *expression = take.name.split("=", 1)
             expression = expression[0] if expression else None
-            if expression:
-                # Expression item: may need evaluation
-                snippets[take.id] = (var_name, expression, track_index, item_index, take)
+            # Expression item: may need evaluation
+            snippets[take.id] = (var_name, expression, track_index, item_index, take)
             # reapy.print(f"SCAN: set {var_name} to {namespace[var_name]}")
     return snippets
 
