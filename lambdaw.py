@@ -143,6 +143,8 @@ def build_peaks(source):
 def eval_takes(take_info):
     generated_audio = False
     for var_name, expression, track_index, item_index, take in take_info:
+        if expression is None:
+            continue
         # Add parenthesis to shorten common case of generator expressions.
         output = eval("(" + expression + ")", namespace)
         rebuild_peaks = output_converter(output, track_index, item_index, take)
