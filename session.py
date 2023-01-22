@@ -1,5 +1,6 @@
 import ctypes
 import importlib
+import time
 import traceback
 
 import reapy
@@ -29,11 +30,12 @@ def run_loop():
         needs_load = True
     try:
         if needs_load:
+            start = time.time()
             if lambdaw is None:
                 import lambdaw
             else:
                 importlib.reload(lambdaw)
-            reapy.show_message_box("Loaded module.", "lambdaw", "ok")
+            reapy.RPR.Help_Set(f"lambdaw: loaded module in {time.time() - start:.3f} seconds", False)
             needs_load = False
         if pending != "reload" and lambdaw:
             lambdaw.execute(pending)
