@@ -6,7 +6,7 @@ import traceback
 import reapy
 
 lambdaw = None
-project = None
+project_info = None
 needs_load = True
 reapy.delete_ext_state("lambdaw", "pending")
 
@@ -18,13 +18,16 @@ reapy.delete_ext_state("lambdaw", "pending")
 ctype_backup = ctypes._pointer_type_cache.copy()
 
 def run_loop():
-    global lambdaw, project, needs_load, ctype_backup
+    global lambdaw, project_info, needs_load, ctype_backup
     ctypes._pointer_type_cache.update(ctype_backup)
 
     pending = reapy.get_ext_state("lambdaw", "pending")
     current_project = reapy.Project()
-    if project != current_project:
-        project = current_project
+    # Try to detect when user switches projects.
+    # (ID only changes on tab switch, not when the user opens a different project in the current tab.)
+    current_project_info = (current_project.id, current_project.name, current_project.path)
+    if project_info != current_project_info:
+        project_info = current_project_info
         needs_load = True  # reload on project switch
     elif pending == "reload" or (pending and not lambdaw):
         needs_load = True
