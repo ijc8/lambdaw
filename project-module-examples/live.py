@@ -63,3 +63,27 @@ def n(pattern, cycles=1):
     for event in pattern.query(vortex.TimeSpan(0, cycles)):
         # TODO: Respect cycle length / project time signature
         yield {"pitch": note_to_pitch(event.value["note"]), "start": float(event.part.begin), "end": float(event.part.end)}
+
+
+# Experiment with RAVE
+
+# This would be ideal, but unfortunately it doesn't work because importing PyTorch causes REAPER to deadlock:
+# from aleatora.rave import rave
+# vintage = rave("vintage.ts")
+
+# The multiprocessing module also doesn't work within REAPER. :-(
+
+# So, for the moment, we do it in a hacky way: just run RAVE in a separate Python process.
+# (Long-term solution is to just do all evaluation in a separate Python process.)
+import os
+import subprocess
+import tempfile
+
+def rave(model_path, audio):
+    with tempfile.TemporaryDirectory() as dir:
+        path = os.path.join(dir, "tmp.wav")
+        wav.save(audio, path)
+        if subprocess.run(["python", "run_rave.py", model_path + ".ts", path, path]).returncode:
+            raise RuntimeError("Failed to run RAVE")
+        result = wav.load(path)
+    return result
