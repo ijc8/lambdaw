@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import sys
 import time
-import typing
+import traceback
 import wave
 
 import reapy
@@ -145,15 +145,22 @@ def eval_takes(take_info):
     for var_name, expression, track_index, item_index, take in take_info:
         if expression is None:
             continue
-        # Add parenthesis to shorten common case of generator expressions.
-        output = eval("(" + expression + ")", namespace)
-        rebuild_peaks = output_converter(output, track_index, item_index, take)
-        # Update value in namespace immediately.
-        # reapy.print(f"EVAL: set {var_name} to {namespace[var_name]}")
-        namespace[var_name] = input_converter(take)
-        if rebuild_peaks:
-            build_peaks(take.source)
-        generated_audio |= rebuild_peaks
+        try:
+            # Add parenthesis to shorten common case of generator expressions.
+            output = eval("(" + expression + ")", namespace)
+        except:
+            if project.is_recording:
+                reapy.show_console_message(traceback.format_exc())
+            else:
+                reapy.show_message_box(traceback.format_exc(), "lambdaw expression")
+        else:      
+            rebuild_peaks = output_converter(output, track_index, item_index, take)
+            # Update value in namespace immediately.
+            # reapy.print(f"EVAL: set {var_name} to {namespace[var_name]}")
+            namespace[var_name] = input_converter(take)
+            if rebuild_peaks:
+                build_peaks(take.source)
+            generated_audio |= rebuild_peaks
 
     if generated_audio:
         collect_garbage()
