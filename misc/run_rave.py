@@ -12,9 +12,11 @@ model = torch.jit.load(sys.argv[1])
 
 audio, sr = torchaudio.load(sys.argv[2])
 
-audio = audio.sum(axis=0).reshape(1, 1, -1)
+delay = 29100
+
+audio = torch.concatenate((audio.sum(axis=0), torch.zeros(delay))).reshape(1, 1, -1)
 with torch.no_grad():
-    output = model(audio).select(0, 0).T.contiguous()
+    output = model(audio).select(0, 0).T.contiguous()[delay:]
 
 # Avoiding torchaudio.save because it uses a funky format in the wave header (which Python's `wave` module can't read).
 with wave.open(sys.argv[3], "wb") as w:

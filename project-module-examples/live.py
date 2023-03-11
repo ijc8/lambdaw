@@ -87,3 +87,17 @@ def rave(model_path, audio):
             raise RuntimeError("Failed to run RAVE")
         result = wav.load(path)
     return result
+
+
+# Experiment with MusicVAE
+
+# Same issue as RAVE: we'd like to run the model directly,
+# but importing Tensorflow causes REAPER to deadlock.
+
+import ast
+
+def musicvae(model):
+    result = subprocess.run(["python", "run_musicvae.py", model], capture_output=True)
+    if result.returncode:
+        raise RuntimeError("Failed to run MusicVAE:\n" + result.stderr.decode("utf8"))
+    return ast.literal_eval(result.stdout.decode("utf8"))
