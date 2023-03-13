@@ -104,6 +104,8 @@ def convert_output(output, track_index, item_index, take):
     # Clear current notes
     while take.n_notes:
         take.notes[0].delete()
+    if output is None:
+        output = ()
     peeked = peek(output)
     first, output = peeked
     if isinstance(first, dict):
