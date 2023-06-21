@@ -48,20 +48,51 @@ except NameError:
     bar = 0
 reapy.print(bar)
 
+module_source = open(__file__).read()
+
+import io
+from contextlib import redirect_stdout
+
+try:
+    history
+except NameError:
+    history = ""
+
+scroll_to_bottom = False
+
 def loop():
-    global input_string, output_string
+    global input_string, output_string, module_source, history, scroll_to_bottom
     visible, open = ImGui_Begin(ctx, 'My window', True)
     if visible:
-        ImGui_Text(ctx, output_string)
-        ImGui_Text(ctx, ">>>")
-        ImGui_SameLine(ctx)
-        _, input_string = ImGui_InputText(ctx, "##code", input_string)
-        if ImGui_IsKeyPressed(ctx, ImGui_Key_Enter()):
-            try:
-                output_string = repr(eval(input_string))
-            except Exception as e:
-                output_string = repr(e)
-        ImGui_End(ctx)
+        try:
+            _, module_source = ImGui_InputTextMultiline(ctx, "##module_source", module_source, 0, 0) #, 0, 0, ImGui_InputTextFlags_AllowTabInput())
+
+            if ImGui_BeginChild(ctx, 'ScrollingRegion', 0, -20, False, ImGui_WindowFlags_HorizontalScrollbar()):
+                ImGui_Text(ctx, history)
+                if scroll_to_bottom:
+                    ImGui_SetScrollHereY(ctx, 1.0)
+                    scroll_to_bottom = False
+                ImGui_EndChild(ctx)
+            ImGui_Text(ctx, ">>>")
+            ImGui_SameLine(ctx)
+            # h = ImGui_CalcTextSize(ctx, input_string)[1] + ImGui_StyleVar_FramePadding()
+            # h = ImGui_GetTextLineHeightWithSpacing(ctx) * input_string.count('\n')
+            _, input_string = ImGui_InputText(ctx, "##code", input_string) #, 0, 0, ImGui_InputTextFlags_AllowTabInput())
+            # if ImGui_GetKeyMods(ctx) & ImGui_Mod_Shift() and ImGui_IsKeyPressed(ctx, ImGui_Key_Enter()):
+            if ImGui_IsKeyPressed(ctx, ImGui_Key_Enter()):
+                try:
+                    reapy.print(repr(input_string))
+                    with io.StringIO() as buf, redirect_stdout(buf):
+                        exec(compile(input_string, "<repl>", "single"), globals())
+                        output_string = buf.getvalue()
+                except Exception as e:
+                    output_string = repr(e)
+                history += ">>> " + input_string + "\n" + output_string
+                input_string = ""
+                ImGui_SetKeyboardFocusHere(ctx, -1) # re-focus text input
+                scroll_to_bottom = True
+        finally:
+            ImGui_End(ctx)
     if open:
         reapy.defer(loop)
 
