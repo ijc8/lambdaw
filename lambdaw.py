@@ -184,14 +184,27 @@ module_path = Path("project.py")
 if not module_path.exists():
     module_path.touch()
 
+import importlib.abc
+
 # Load user project module by path.
 # See https://docs.python.org/3/library/importlib.html#importing-a-source-file-directly
 # We need to do it this way instead of just modifying sys.path in order to
 # deal with having multiple "project" modules - one per Reaper project.
-spec = importlib.util.spec_from_file_location("project", module_path)
-user_project_module = importlib.util.module_from_spec(spec)
-sys.modules["project"] = user_project_module
-spec.loader.exec_module(user_project_module)
+# Switched to `sys.meta_path` after running into this issue:
+# https://stackoverflow.com/questions/62052359/modulespec-not-found-during-reload-for-programmatically-imported-file-in-differe
+class ModuleFinder(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path, target=None):
+        if fullname == "project":
+            return importlib.util.spec_from_file_location("project", module_path)
+
+sys.meta_path.append(ModuleFinder())
+
+# TODO test project switching
+if "project" in sys.modules and module_path.samefile(sys.modules["project"].__file__):
+    reapy.print("reloading")
+    importlib.reload(sys.modules["project"])
+else:
+    reapy.print("loading for the first time")
 exec("from project import *", namespace)
 
 def scan_items():

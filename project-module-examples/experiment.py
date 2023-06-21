@@ -41,26 +41,32 @@ import sys
 sys.path.append(reapy.get_resource_path() + "/Scripts/ReaTeam Extensions/API")
 from imgui_python import *
 
+# check if state survives reloads
+try:
+    bar += 1
+except NameError:
+    bar = 0
+reapy.print(bar)
+
+def loop():
+    global input_string, output_string
+    visible, open = ImGui_Begin(ctx, 'My window', True)
+    if visible:
+        ImGui_Text(ctx, output_string)
+        ImGui_Text(ctx, ">>>")
+        ImGui_SameLine(ctx)
+        _, input_string = ImGui_InputText(ctx, "##code", input_string)
+        if ImGui_IsKeyPressed(ctx, ImGui_Key_Enter()):
+            try:
+                output_string = repr(eval(input_string))
+            except Exception as e:
+                output_string = repr(e)
+        ImGui_End(ctx)
+    if open:
+        reapy.defer(loop)
+
 def gui_test():
-    ctx = ImGui_CreateContext('My script')
+    global ctx, input_string, output_string
     input_string = ""
     output_string = "<output>"
-    def loop():
-        nonlocal input_string, output_string
-        visible, open = ImGui_Begin(ctx, 'My window', True)
-        if visible:
-            ImGui_Text(ctx, output_string)
-            # changed, contents = ImGui_InputText(ctx, 'input text', input_string, None, ImGui_InputTextFlags_EnterReturnsTrue())
-            ImGui_Text(ctx, ">>>")
-            ImGui_SameLine(ctx)
-            _, input_string = ImGui_InputText(ctx, "##code", input_string)
-            if ImGui_IsKeyPressed(ctx, ImGui_Key_Enter()):
-                try:
-                    output_string = repr(eval(input_string))
-                except Exception as e:
-                    output_string = repr(e)
-            ImGui_End(ctx)
-        if open:
-            reapy.defer(loop)
-
-    reapy.defer(loop)
+    ctx = ImGui_CreateContext('My script')
