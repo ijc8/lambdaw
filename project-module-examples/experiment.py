@@ -51,43 +51,56 @@ reapy.print(bar)
 module_source = open(__file__).read()
 
 import io
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout, redirect_stderr
 
 try:
     history
 except NameError:
-    history = ""
+    history = []
 
 scroll_to_bottom = False
 
+from code import InteractiveInterpreter
+interp = InteractiveInterpreter()
+
+COLORS = {
+    "input": 0xFFCC99FF,
+    "output": 0x6699FFFF,
+    "error": 0xFF6666FF,
+}
+
 def loop():
-    global input_string, output_string, module_source, history, scroll_to_bottom
+    global input_string, module_source, history, scroll_to_bottom
     visible, open = ImGui_Begin(ctx, 'My window', True)
     if visible:
         try:
+            ImGui_PushItemWidth(ctx, -1)
             _, module_source = ImGui_InputTextMultiline(ctx, "##module_source", module_source, 0, 0) #, 0, 0, ImGui_InputTextFlags_AllowTabInput())
+            ImGui_PopItemWidth(ctx)
 
             if ImGui_BeginChild(ctx, 'ScrollingRegion', 0, -20, False, ImGui_WindowFlags_HorizontalScrollbar()):
-                ImGui_Text(ctx, history)
+                for (type, content) in history:
+                    ImGui_PushStyleColor(ctx, ImGui_Col_Text(), COLORS[type])
+                    if type == "input": content = ">>> " + content
+                    ImGui_Text(ctx, content)
+                    ImGui_PopStyleColor(ctx)
                 if scroll_to_bottom:
                     ImGui_SetScrollHereY(ctx, 1.0)
                     scroll_to_bottom = False
                 ImGui_EndChild(ctx)
             ImGui_Text(ctx, ">>>")
             ImGui_SameLine(ctx)
-            # h = ImGui_CalcTextSize(ctx, input_string)[1] + ImGui_StyleVar_FramePadding()
-            # h = ImGui_GetTextLineHeightWithSpacing(ctx) * input_string.count('\n')
-            _, input_string = ImGui_InputText(ctx, "##code", input_string) #, 0, 0, ImGui_InputTextFlags_AllowTabInput())
-            # if ImGui_GetKeyMods(ctx) & ImGui_Mod_Shift() and ImGui_IsKeyPressed(ctx, ImGui_Key_Enter()):
+            ImGui_PushItemWidth(ctx, -1)
+            _, input_string = ImGui_InputText(ctx, "##code", input_string)
+            ImGui_PopItemWidth(ctx)
             if ImGui_IsKeyPressed(ctx, ImGui_Key_Enter()):
-                try:
-                    reapy.print(repr(input_string))
-                    with io.StringIO() as buf, redirect_stdout(buf):
-                        exec(compile(input_string, "<repl>", "single"), globals())
-                        output_string = buf.getvalue()
-                except Exception as e:
-                    output_string = repr(e)
-                history += ">>> " + input_string + "\n" + output_string
+                with io.StringIO() as outbuf, io.StringIO() as errbuf, redirect_stdout(outbuf), redirect_stderr(errbuf):
+                    interp.runsource(input_string)
+                    output_string = outbuf.getvalue()
+                    error_string = errbuf.getvalue()
+                history.append(("input", input_string))
+                if output_string: history.append(("output", output_string))
+                if error_string: history.append(("error", error_string))
                 input_string = ""
                 ImGui_SetKeyboardFocusHere(ctx, -1) # re-focus text input
                 scroll_to_bottom = True
@@ -97,7 +110,6 @@ def loop():
         reapy.defer(loop)
 
 def gui_test():
-    global ctx, input_string, output_string
+    global ctx, input_string
     input_string = ""
-    output_string = "<output>"
     ctx = ImGui_CreateContext('My script')
