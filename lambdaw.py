@@ -199,12 +199,15 @@ class ModuleFinder(importlib.abc.MetaPathFinder):
 
 sys.meta_path.append(ModuleFinder())
 
-# TODO test project switching
-if "project" in sys.modules and module_path.samefile(sys.modules["project"].__file__):
-    reapy.print("reloading")
-    importlib.reload(sys.modules["project"])
+if "project" in sys.modules:
+    if module_path.samefile(sys.modules["project"].__file__):
+        reapy.print("reloading")
+        importlib.reload(sys.modules["project"])
+    else:
+        reapy.print("clearing previous project module", sys.modules["project"].__file__)
+        del sys.modules["project"]
 else:
-    reapy.print("loading for the first time")
+    reapy.print("loading for the first time", lambdaw_dir)
 exec("from project import *", namespace)
 
 def scan_items():
