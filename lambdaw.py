@@ -201,13 +201,13 @@ sys.meta_path.append(ModuleFinder())
 
 if "project" in sys.modules:
     if module_path.samefile(sys.modules["project"].__file__):
-        reapy.print("reloading")
+        # reapy.print("reloading")
         importlib.reload(sys.modules["project"])
     else:
-        reapy.print("clearing previous project module", sys.modules["project"].__file__)
+        # reapy.print("clearing previous project module", sys.modules["project"].__file__)
         del sys.modules["project"]
-else:
-    reapy.print("loading for the first time", lambdaw_dir)
+# else:
+#     reapy.print("loading for the first time", lambdaw_dir)
 exec("from project import *", namespace)
 
 def scan_items():
@@ -298,10 +298,11 @@ def execute(pending):
         filter = {
             "eval_all": lambda _: True,
             "eval_selected": lambda take: take.item.is_selected or take.id in changed,
-            "": lambda take: take.id in changed,
-        }[pending]
+        }.get(pending, lambda take: take.id in changed)
         eval_takes(v for v in snippets.values() if filter(v[-1]))
 
+    if pending == "edit_expression":
+        edit_expression()
 
 
 # Experimental ImGui work
@@ -387,7 +388,7 @@ EventFlag == InputTextFlags_CallbackHistory ? (
 
 def loop():
     global input_string, module_source, scroll_to_bottom, console, history
-    visible, open = ImGui_Begin(ctx, 'My window', True)
+    visible, open = ImGui_Begin(ctx, "LambDAW Editor + REPL", True)
     if visible:
         try:
             ImGui_PushItemWidth(ctx, -1)
@@ -425,6 +426,55 @@ def loop():
             ImGui_End(ctx)
     if open:
         reapy.defer(loop)
+    
+    overlay()
+
+
+
+# Overlay for expression input
+expression_input = ""
+show_expression_editor = False
+
+def edit_expression():
+    global show_expression_editor
+    show_expression_editor = True
+
+def overlay():
+    global show_expression_editor
+    if not show_expression_editor: return
+
+    window_flags = (ImGui_WindowFlags_NoCollapse()       |
+                    ImGui_WindowFlags_NoDocking()          |
+                    ImGui_WindowFlags_AlwaysAutoResize()   |
+                    ImGui_WindowFlags_NoSavedSettings())
+
+    # Center window
+    center_x, center_y = ImGui_Viewport_GetCenter(ImGui_GetMainViewport(ctx))
+    ImGui_SetNextWindowPos(ctx, center_x, center_y, ImGui_Cond_Always(), 0.5, 0.5)
+    # window_flags = window_flags | ImGui_WindowFlags_NoMove()
+
+    ImGui_SetNextWindowBgAlpha(ctx, 0.6) # Translucent background
+
+    rv, open = ImGui_Begin(ctx, 'Enter name/expression', True, window_flags)
+    if not rv: return open
+
+    ImGui_Text(ctx, "ex: `=osc(440)`, `foo=bar(baz)`")
+
+    global expression_input
+    if ImGui_IsWindowAppearing(ctx):
+        ImGui_SetKeyboardFocusHere(ctx)
+    done, expression_input = ImGui_InputText(ctx, "##expression", expression_input, ImGui_InputTextFlags_EnterReturnsTrue())
+    if ImGui_IsKeyPressed(ctx, ImGui_Key_Escape()):
+        show_expression_editor = False
+    if done:
+        # TODO: if no item is selected, create a new item with the given expression. probably should have some max duration in case of infinite streams.
+        reapy.RPR.GetSetMediaItemTakeInfo_String(project.get_selected_item(0).active_take.id, "P_NAME", expression_input, True)
+        expression_input = ""
+        show_expression_editor = False
+
+    ImGui_End(ctx)
+
+
 
 # Don't restart ImGui context on reload
 try:
