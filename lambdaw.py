@@ -1,6 +1,8 @@
 import array
+import collections
 import importlib
 import itertools
+import numbers
 import os
 from pathlib import Path
 import sys
@@ -104,26 +106,30 @@ def convert_output(output, track_index, item_index, take):
     # Clear current notes
     while take.n_notes:
         take.notes[0].delete()
-    if output is None:
-        output = ()
-    peeked = peek(output)
-    first, output = peeked
-    if isinstance(first, dict):
-        if not take.is_midi:
-            create_midi_source(take)
-        for note in output:
-            take.add_note(**convert_note(note))
-        return False
-    else:
-        path = os.path.join(audio_dir, f"track{track_index}_item{item_index}_{time.monotonic_ns()}.wav")
-        generate_wave(path, itertools.islice(output, int(take.item.length * SAMPLE_RATE)))
+    if isinstance(output, collections.abc.Iterable):
+        first, peeked_output = peek(output)
+        if isinstance(first, dict):
+            # MIDI notes (TODO: use dedicated type)
+            if not take.is_midi:
+                create_midi_source(take)
+            for note in peeked_output:
+                take.add_note(**convert_note(note))
+            return False
+        elif isinstance(first, numbers.Number):
+            # audio samples
+            path = os.path.join(audio_dir, f"track{track_index}_item{item_index}_{time.monotonic_ns()}.wav")
+            generate_wave(path, itertools.islice(peeked_output, int(take.item.length * SAMPLE_RATE)))
 
-        source = reapy.RPR.PCM_Source_CreateFromFile(os.path.join(lambdaw_dir, path))
-        old_source = take.source
-        reapy.RPR.SetMediaItemTake_Source(take.id, source)
-        if Path(old_source.filename).is_relative_to(audio_dir):
-            reapy.RPR.PCM_Source_Destroy(old_source.id)
-        return True
+            source = reapy.RPR.PCM_Source_CreateFromFile(os.path.join(lambdaw_dir, path))
+            old_source = take.source
+            reapy.RPR.SetMediaItemTake_Source(take.id, source)
+            if Path(old_source.filename).is_relative_to(audio_dir):
+                reapy.RPR.PCM_Source_Destroy(old_source.id)
+            return True
+    # For anything else, just put the repr in the item note.
+    reapy.RPR.GetSetMediaItemInfo_String(take.item.id, "P_NOTES", repr(output), True)
+    return False
+        
 
 input_converter = convert_input
 output_converter = convert_output
@@ -322,7 +328,7 @@ except NameError:
 scroll_to_bottom = False
 
 from code import InteractiveInterpreter
-interp = InteractiveInterpreter(globals())
+interp = InteractiveInterpreter(namespace)
 
 COLORS = {
     "input": 0xFFCC99FF,
