@@ -5,6 +5,7 @@ import itertools
 import numbers
 import os
 from pathlib import Path
+import subprocess
 import sys
 import time
 import traceback
@@ -392,11 +393,25 @@ EventFlag == InputTextFlags_CallbackHistory ? (
             self.history[self.history_pos] = contents
         return sent, contents
 
+try:
+    process
+except NameError:
+    process = None
+
 def loop():
-    global input_string, module_source, scroll_to_bottom, console, history
+    global input_string, module_source, scroll_to_bottom, console, history, process
     visible, open = ImGui_Begin(ctx, "LambDAW Editor + REPL", True)
     if visible:
         try:
+            ImGui_Text(ctx, "subprocess status: dead")
+            if ImGui_Button(ctx, "start subprocess"):
+                reapy.print("bang")
+                process = subprocess.Popen(["python", "-i"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+            if ImGui_Button(ctx, "send 2+2"):
+                process.stdin.write(b"2+2\n")
+                process.stdin.flush()
+            if ImGui_Button(ctx, "get line from output"):
+                reapy.print(process.stdout.readline())
             ImGui_PushItemWidth(ctx, -1)
             _, module_source = ImGui_InputTextMultiline(ctx, "##module_source", module_source, 0, 200, ImGui_InputTextFlags_AllowTabInput())
             ImGui_PopItemWidth(ctx)
