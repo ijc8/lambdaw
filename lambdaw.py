@@ -398,23 +398,54 @@ try:
 except NameError:
     process = None
 
+def get_process_status():
+    if process is None:
+        return "not started"
+    process.poll()
+    if process.returncode is None:
+        return "alive"
+    else:
+        return f"dead ({process.returncode})"
+
+import queue
+q = queue.Queue()
+def read_stdout():
+    # reapy.print("stdout started")
+    for line in process.stdout:
+        # reapy.print("stdout", line)
+        q.put(("output", line.decode("utf8")))
+
+def read_stderr():
+    # reapy.print("stderr started")
+    for line in process.stderr:
+        # reapy.print("stderr", line)
+        q.put(("error", line.decode("utf8")))
+
+import threading
+
 def loop():
-    global input_string, module_source, scroll_to_bottom, console, history, process
+    global input_string, module_source, scroll_to_bottom, console, history, process, threads
     visible, open = ImGui_Begin(ctx, "LambDAW Editor + REPL", True)
     if visible:
         try:
-            ImGui_Text(ctx, "subprocess status: dead")
+            ImGui_Text(ctx, "subprocess status: " + get_process_status())
+            ImGui_SameLine(ctx)
             if ImGui_Button(ctx, "start subprocess"):
                 reapy.print("bang")
-                process = subprocess.Popen(["python", "-i"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-            if ImGui_Button(ctx, "send 2+2"):
-                process.stdin.write(b"2+2\n")
-                process.stdin.flush()
-            if ImGui_Button(ctx, "get line from output"):
-                reapy.print(process.stdout.readline())
+                process = subprocess.Popen(["python", "-i"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                threads = [threading.Thread(target=t) for t in (read_stdout, read_stderr)]
+                for thread in threads: thread.start()
+
             ImGui_PushItemWidth(ctx, -1)
             _, module_source = ImGui_InputTextMultiline(ctx, "##module_source", module_source, 0, 200, ImGui_InputTextFlags_AllowTabInput())
             ImGui_PopItemWidth(ctx)
+
+            while True:
+                try:
+                    history.append(q.get_nowait())
+                    scroll_to_bottom = True
+                except queue.Empty:
+                    break
 
             if ImGui_BeginChild(ctx, 'ScrollingRegion', 0, -20, False, ImGui_WindowFlags_HorizontalScrollbar()):
                 for (type, content) in history:
@@ -432,14 +463,17 @@ def loop():
             sent, input_string = console.draw(ctx, "##code")
             ImGui_PopItemWidth(ctx)
             if sent:
-                with io.StringIO() as outbuf, io.StringIO() as errbuf, redirect_stdout(outbuf), redirect_stderr(errbuf):
-                    interp.runsource(input_string)
-                    output_string = outbuf.getvalue()
-                    error_string = errbuf.getvalue()
-                console.exec(input_string)
+                if process:
+                    process.stdin.write((input_string + "\n").encode("utf8"))
+                    process.stdin.flush()
+                # with io.StringIO() as outbuf, io.StringIO() as errbuf, redirect_stdout(outbuf), redirect_stderr(errbuf):
+                #     interp.runsource(input_string)
+                #     output_string = outbuf.getvalue()
+                #     error_string = errbuf.getvalue()
+                # console.exec(input_string)
                 history.append(("input", input_string))
-                if output_string: history.append(("output", output_string))
-                if error_string: history.append(("error", error_string))
+                # if output_string: history.append(("output", output_string))
+                # if error_string: history.append(("error", error_string))
                 input_string = ""
                 ImGui_SetKeyboardFocusHere(ctx, -1) # re-focus text input
                 scroll_to_bottom = True
