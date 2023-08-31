@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import sys
 import time
-import typing
+import traceback
 import wave
 
 import ffmpeg
@@ -127,6 +127,8 @@ def convert_output(output, track_index, item_index, take):
     # Clear current notes
     while take.n_notes:
         take.notes[0].delete()
+    if output is None:
+        output = ()
     peeked = peek(output)
     first, output = peeked
     if isinstance(first, dict):
@@ -169,15 +171,24 @@ def build_peaks(source):
 def eval_takes(take_info):
     generated_audio = False
     for var_name, expression, track_index, item_index, take in take_info:
-        # Add parenthesis to shorten common case of generator expressions.
-        output = eval("(" + expression + ")", namespace)
-        rebuild_peaks = output_converter(output, track_index, item_index, take)
-        # Update value in namespace immediately.
-        # reapy.print(f"EVAL: set {var_name} to {namespace[var_name]}")
-        namespace[var_name] = input_converter(take)
-        if rebuild_peaks:
-            build_peaks(take.source)
-        generated_audio |= rebuild_peaks
+        if expression is None:
+            continue
+        try:
+            # Add parenthesis to shorten common case of generator expressions.
+            output = eval("(" + expression + ")", namespace)
+        except:
+            if project.is_recording:
+                reapy.show_console_message(traceback.format_exc())
+            else:
+                reapy.show_message_box(traceback.format_exc(), "lambdaw expression")
+        else:      
+            rebuild_peaks = output_converter(output, track_index, item_index, take)
+            # Update value in namespace immediately.
+            # reapy.print(f"EVAL: set {var_name} to {namespace[var_name]}")
+            namespace[var_name] = input_converter(take)
+            if rebuild_peaks:
+                build_peaks(take.source)
+            generated_audio |= rebuild_peaks
 
     if generated_audio:
         collect_garbage()
@@ -218,9 +229,8 @@ def scan_items():
             take = item.active_take
             var_name, *expression = take.name.split("=", 1)
             expression = expression[0] if expression else None
-            if expression:
-                # Expression item: may need evaluation
-                snippets[take.id] = (var_name, expression, track_index, item_index, take)
+            # Expression item: may need evaluation
+            snippets[take.id] = (var_name, expression, track_index, item_index, take)
             # reapy.print(f"SCAN: set {var_name} to {namespace[var_name]}")
     return snippets
 
@@ -288,7 +298,7 @@ def execute(pending):
 
     changed = set()
     for key, value in snippets.items():
-        if key not in old_snippets or old_snippets[key][0] != value[0]:
+        if key not in old_snippets or old_snippets[key][1] != value[1]:
             changed.add(key)
 
     # Check for new/updated expressions in take names

@@ -16,7 +16,7 @@ If this seems a bit abstract, think of how spreadsheets let you mix formulas wit
 :warning: LambDAW is under heavy development. :warning:
 
 In the future, we may release an extension compatible with [ReaPack](https://reapack.com/).
-Until then, you can try it by cloning the repo, running `session.py` as a script in REAPER, and tweaking your setup (keybindings and theme) to make it convenient to use.
+Until then, you can try it by cloning the repo, running `session.py` as a script in REAPER, and tweaking your setup (keybindings and theme) to make it convenient to use. You can also find a few basic examples of project modules in `project-module-examples/` which might be helpful for getting started.
 
 If you are interested it trying LambDAW, feel free to contact [the author](https://ijc8.me).
 

@@ -1,18 +1,21 @@
+import re
 import reapy
 
 project = reapy.Project()
 
+expr_regex = re.compile("(.*?)([=≠])(.*)")
+
+def toggle_expression(expr):
+    if match := expr_regex.match(expr):
+        name, equal, expression = match.groups()
+        return name + "=≠"[equal == "="] + expression
+
 if project.n_selected_items:
     for item in project.selected_items:
-        # TODO: update for names with LHS, as in "foo=bar".
         take = item.active_take
-        if take.name.startswith("="):
-            reapy.RPR.GetSetMediaItemTakeInfo_String(take.id, "P_NAME", "≠" + take.name[1:], True)
-        elif take.name.startswith("≠"):
-            reapy.RPR.GetSetMediaItemTakeInfo_String(take.id, "P_NAME", "=" + take.name[1:], True)
+        if new_name := toggle_expression(take.name):
+            reapy.RPR.GetSetMediaItemTakeInfo_String(take.id, "P_NAME", new_name, True)
 else:
     for track in project.selected_tracks:
-        if track.name.startswith("="):
-            track.name = "≠" + track.name[1:]
-        elif track.name.startswith("≠"):
-            track.name = "=" + track.name[1:]
+        if new_name := toggle_expression(track.name):
+            track.name = new_name
