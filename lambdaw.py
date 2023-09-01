@@ -28,19 +28,23 @@ def generate_wave(name, it):
     return path
 
 def generate_video(name, it):
-    path = os.path.join(media_dir, name + ".mp4")
+    path = os.path.join(media_dir, name + ".mkv")
     fps = 30
+    # TODO: determine width and height from first frame
     width, height = 1280, 720
+    # lossless encoding via ffv1 (use x264 for lossy)
     process = (
         ffmpeg
             .input('pipe:', format='rawvideo', pix_fmt='rgb24', s='{}x{}'.format(width, height), framerate=fps)
-            .output(path, pix_fmt='yuv420p', vcodec='libx264', r=fps)
+            .output(path, pix_fmt='yuv420p', vcodec='ffv1', r=fps)
             .overwrite_output()
             .run_async(pipe_stdin=True)
     )
 
     for i, frame in enumerate(it):
-        process.stdin.write((frame * 255).astype(np.uint8))
+        if frame.dtype != np.uint8:
+            frame = (frame * 255).astype(np.uint8)
+        process.stdin.write(frame)
 
     process.stdin.close()
     process.wait()

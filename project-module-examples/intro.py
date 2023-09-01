@@ -119,3 +119,13 @@ def sing(text):
 def prompt(min=0, max=100):
     p = subprocess.run(["zenity", "--scale", "--min-value", str(min), "--max-value", str(max)], capture_output=True)
     return float(p.stdout.decode("utf8"))
+
+# Experiment with py5
+from PIL import Image
+
+def py5_test(demo):
+    with tempfile.TemporaryDirectory() as dir:
+        if subprocess.run(["python", "run_py5.py", demo, dir]).returncode:
+            raise RuntimeError("Failed to run py5")
+        for frame in sorted(os.listdir(dir)):
+            yield np.asarray(Image.open(os.path.join(dir, frame)))
