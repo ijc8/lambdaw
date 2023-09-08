@@ -70,6 +70,7 @@ def collect_garbage():
         Path(file).unlink()
         Path(file + ".reapeaks").unlink(True)
 
+@reapy.inside_reaper()
 def convert_input(take: reapy.Take):
     take_start = take.item.position - take.start_offset
     def convert_note(note):
@@ -143,19 +144,22 @@ def build_peaks(source):
     reapy.RPR.PCM_Source_BuildPeaks(source.id, 2)
 
 def eval_takes(take_info):
+    print(" ".join(repr(x[:2]) for x in take_info))
     generated_audio = False
     for var_name, expression, track_index, item_index, take in take_info:
         if expression is None:
             continue
         try:
             # Add parenthesis to shorten common case of generator expressions.
+            print("eval:", expression)
             output = eval("(" + expression + ")", namespace)
         except:
             if project.is_recording:
                 reapy.show_console_message(traceback.format_exc())
             else:
                 reapy.show_message_box(traceback.format_exc(), "lambdaw expression")
-        else:      
+        else:
+            print("converting output for", var_name, expression)
             rebuild_peaks = output_converter(output, track_index, item_index, take)
             # Update value in namespace immediately.
             # reapy.print(f"EVAL: set {var_name} to {namespace[var_name]}")
@@ -194,6 +198,7 @@ sys.modules["project"] = user_project_module
 spec.loader.exec_module(user_project_module)
 exec("from project import *", namespace)
 
+@reapy.inside_reaper()
 def scan_items():
     # NOTE: Even if we're only re-evaluating a subset of items,
     # the namespace needs to contain all items so user code can refer to them.
@@ -223,6 +228,7 @@ def is_expression_name(name):
     return after and (before == "" or before.isidentifier())
 
 def execute(pending):
+    start = time.time()
     global counter, snippets, project, next_cycle_items
     if not (pending or counter > 3):
         # Don't check for updates every time.
@@ -262,18 +268,23 @@ def execute(pending):
         next_cycle_items = {}
         reapy.update_arrange()
 
+    print("A", time.time() - start)
+
     old_snippets = snippets
     snippets = scan_items()
+    print("B", time.time() - start)
     # TODO: Only convert *last* copy with name.
     for id, (var_name, expression, track_index, item_index, take) in snippets.items():
         # Avoid reading in items newly-generated from tracks, which are empty.
         if id not in new_cycle_items:
             namespace[var_name] = input_converter(take)
+    print("C", time.time() - start)
 
     changed = set()
     for key, value in snippets.items():
         if key not in old_snippets or old_snippets[key][1] != value[1]:
             changed.add(key)
+    print("D", time.time() - start)
 
     # Check for new/updated expressions in take names
     # reapy.print("TICK")
@@ -281,7 +292,24 @@ def execute(pending):
         # reapy.print("changed:", {id: snippets[id][0] for id in changed})
         filter = {
             "eval_all": lambda _: True,
-            "eval_selected": lambda take: take.item.is_selected or take.id in changed,
-            "": lambda take: take.id in changed,
+            "eval_selected": lambda v: v[-1].item.is_selected or v[0] in changed,
+            "": lambda v: v[0] in changed,
         }[pending]
-        eval_takes(v for v in snippets.values() if filter(v[-1]))
+        eval_takes([v for v in snippets.values() if filter(v)])
+    print("E", time.time() - start)
+
+
+if __name__ == "__main__":
+    import time
+
+    print("Starting.")
+    while True:
+        start = time.time()
+        pending = reapy.get_ext_state("lambdaw", "pending")
+        if pending:
+            print(pending)
+        execute(pending)
+        if pending:
+            reapy.delete_ext_state("lambdaw", "pending")
+        print(time.time() - start)
+        time.sleep(0.05)
